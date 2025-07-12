@@ -32,19 +32,20 @@ app.post('/merge', async (req, res) => {
     console.log(`Video: ${videoUrl}`);
     console.log(`Audio: ${audioUrl}`);
     
-    // FFmpeg command with HTTP protocol enabled and proper video scaling
+    // FFmpeg command with HTTP protocol enabled and video speed adjustment
     const ffmpegArgs = [
       '-protocol_whitelist', 'file,http,https,tcp,tls,crypto',
       '-i', videoUrl,
       '-i', audioUrl,
-      '-c:v', 'libx264',  // Re-encode video to allow scaling
+      '-c:v', 'libx264',
       '-c:a', 'aac',
       '-map', '0:v:0',
       '-map', '1:a:0',
-      '-filter_complex', '[0:v]scale2ref=oh*mdar:ih[v][ref];[v]setpts=PTS*TDUR/VDUR[vout]',
-      '-filter:a', 'aresample=44100',
-      '-shortest',  // Match shortest stream duration
-      '-y',  // Overwrite output file
+      '-filter:v', 'setpts=PTS*VDUR/ADUR',  // Adjust video speed to match audio duration
+      '-shortest',  // Use shortest stream duration
+      '-preset', 'fast',  // Faster encoding
+      '-crf', '23',  // Good quality/size balance
+      '-y',
       outputPath
     ];
     
@@ -107,33 +108,6 @@ app.post('/merge', async (req, res) => {
     res.status(500).json({ error: 'Internal server error' });
   }
 });
-
-// Alternative endpoint that returns a download URL (if you prefer async processing)
-app.post('/merge-async', async (req, res) => {
-  const { videoUrl, audioUrl } = req.body;
-  
-  if (!videoUrl || !audioUrl) {
-    return res.status(400).json({ 
-      error: 'Both videoUrl and audioUrl are required' 
-    });
-  }
-  
-  const jobId = uuidv4();
-  res.json({ 
-    jobId, 
-    message: 'Processing started',
-    statusUrl: `/status/${jobId}`,
-    downloadUrl: `/download/${jobId}`
-  });
-  
-  // Process in background (implement if needed)
-  processVideoAsync(jobId, videoUrl, audioUrl);
-});
-
-async function processVideoAsync(jobId, videoUrl, audioUrl) {
-  // Similar to above but store result and provide status endpoint
-  // Implementation depends on your needs
-}
 
 app.listen(PORT, () => {
   console.log(`Video merger API running on port ${PORT}`);
