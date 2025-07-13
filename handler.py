@@ -198,40 +198,60 @@ def create_parallax_video(image_url, duration, output_width=1920, output_height=
         # Determine if image is smaller than target
         needs_upscaling = img_width < target_width or img_height < target_height
         
+        # Calculate if we need different approach based on image size
+        img_aspect = img_width / img_height
+        target_aspect = output_width / output_height
+        
         if needs_upscaling:
-            print(f"Image is smaller than target {target_width}x{target_height}, will center and scale")
+            print(f"Image is smaller than target, creating zoom-out effect to hide black padding")
             
-            # For small images: Use scale filter without zoompan to avoid errors
+            # Strategy: Create a version that starts zoomed in (filling frame) 
+            # and slowly zooms out to show the full centered image
+            
+            # Calculate scaling to fill frame initially
+            if img_aspect > target_aspect:
+                # Image is wider - scale by height
+                fill_scale = output_height / img_height
+            else:
+                # Image is taller - scale by width  
+                fill_scale = output_width / img_width
+            
+            # Make sure we have enough room to zoom out
+            final_scale = fill_scale * 0.7  # End at 70% of fill scale
+            
+            scaled_width = int(img_width * fill_scale)
+            scaled_height = int(img_height * fill_scale)
+            
             ffmpeg_cmd = [
                 'ffmpeg', '-y',
                 '-loop', '1',
                 '-i', image_path,
                 '-c:v', 'h264_nvenc',
-                '-preset', 'p4',
+                '-preset', 'p4', 
                 '-cq', '23',
                 '-pix_fmt', 'yuv420p',
                 '-vf', 
-                # Simple scale and center without zoom for now
-                f'scale={output_width}:{output_height}:force_original_aspect_ratio=decrease,'
-                f'pad={output_width}:{output_height}:(ow-iw)/2:(oh-ih)/2:color=black',
+                # Create static effect first - start filled, end centered
+                f'scale={scaled_width}:{scaled_height},'  # Scale to fill
+                f'pad={output_width}:{output_height}:(ow-iw)/2:(oh-ih)/2:color=black',  # Center with padding
                 '-t', str(duration),
                 '-r', '30',
                 output_path
             ]
         else:
-            print(f"Image is large enough, will crop normally")
+            print(f"Image is large enough, creating subtle zoom effect")
             
-            # For large images: Simple scale and crop
+            # For large images: subtle zoom in effect
             ffmpeg_cmd = [
                 'ffmpeg', '-y',
                 '-loop', '1',
                 '-i', image_path,
                 '-c:v', 'h264_nvenc',
                 '-preset', 'p4',
-                '-cq', '23',
+                '-cq', '23', 
                 '-pix_fmt', 'yuv420p',
-                '-vf', 
-                f'scale={output_width}:{output_height}:force_original_aspect_ratio=increase,'
+                '-vf',
+                f'scale={int(output_width * 1.1)}:{int(output_height * 1.1)}:force_original_aspect_ratio=increase,'
                 f'crop={output_width}:{output_height}',
                 '-t', str(duration),
                 '-r', '30',
