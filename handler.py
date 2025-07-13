@@ -189,70 +189,22 @@ def create_parallax_video(image_url, duration, output_width=1920, output_height=
         img_width, img_height = get_image_dimensions(image_path)
         print(f"Image dimensions: {img_width}x{img_height}")
         
-        # Calculate scaling for zoom effect
-        # We need extra room for zoom, so scale up by 150%
-        zoom_factor = 1.5
-        target_width = int(output_width * zoom_factor)
-        target_height = int(output_height * zoom_factor)
+        # Simple approach - just scale to exact output size
+        print(f"Scaling {img_width}x{img_height} to {output_width}x{output_height}")
         
-        # Determine if image is smaller than target
-        needs_upscaling = img_width < target_width or img_height < target_height
-        
-        # Calculate if we need different approach based on image size
-        img_aspect = img_width / img_height
-        target_aspect = output_width / output_height
-        
-        if needs_upscaling:
-            print(f"Image is smaller than target, scaling to fill frame properly")
-            
-            # For small images: Scale to fill the output frame completely
-            # Calculate scale factor to fill frame (no black bars)
-            if img_aspect > target_aspect:
-                # Image is wider relative to target - scale by height to fill
-                scale_width = int((img_width * output_height) / img_height)
-                scale_height = output_height
-            else:
-                # Image is taller relative to target - scale by width to fill
-                scale_width = output_width
-                scale_height = int((img_height * output_width) / img_width)
-            
-            print(f"Scaling {img_width}x{img_height} to {scale_width}x{scale_height} for {output_width}x{output_height} output")
-            
-            ffmpeg_cmd = [
-                'ffmpeg', '-y',
-                '-loop', '1',
-                '-i', image_path,
-                '-c:v', 'h264_nvenc',
-                '-preset', 'p4', 
-                '-cq', '23',
-                '-pix_fmt', 'yuv420p',
-                '-vf', 
-                # Scale to fill frame completely, then crop to exact size
-                f'scale={scale_width}:{scale_height},'
-                f'crop={output_width}:{output_height}:(iw-ow)/2:(ih-oh)/2',  # Crop from center
-                '-t', str(duration),
-                '-r', '30',
-                output_path
-            ]
-        else:
-            print(f"Image is large enough, scaling and cropping normally")
-            
-            # For large images: Scale to fill and crop
-            ffmpeg_cmd = [
-                'ffmpeg', '-y',
-                '-loop', '1',
-                '-i', image_path,
-                '-c:v', 'h264_nvenc',
-                '-preset', 'p4',
-                '-cq', '23', 
-                '-pix_fmt', 'yuv420p',
-                '-vf',
-                f'scale={output_width}:{output_height}:force_original_aspect_ratio=increase,'
-                f'crop={output_width}:{output_height}:(iw-ow)/2:(ih-oh)/2',
-                '-t', str(duration),
-                '-r', '30',
-                output_path
-            ]
+        ffmpeg_cmd = [
+            'ffmpeg', '-y',
+            '-loop', '1',
+            '-i', image_path,
+            '-c:v', 'h264_nvenc',
+            '-preset', 'p4', 
+            '-cq', '23',
+            '-pix_fmt', 'yuv420p',
+            '-vf', f'scale={output_width}:{output_height}',  # Simple scale
+            '-t', str(duration),
+            '-r', '30',
+            output_path
+        ]
         
         print(f"Job {job_id}: Starting FFmpeg parallax processing...")
         print(f"Command: {' '.join(ffmpeg_cmd)}")
