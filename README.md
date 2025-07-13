@@ -50,7 +50,8 @@ docker push your-username/video-merger:latest
 
 ## Usage from n8n
 
-### HTTP Request Node Configuration:
+### Video + Audio Merge:
+**HTTP Request Node Configuration:**
 - **Method**: POST
 - **URL**: `https://api.runpod.ai/v2/{ENDPOINT_ID}/runsync`
 - **Headers**:
@@ -64,21 +65,45 @@ docker push your-username/video-merger:latest
   ```json
   {
     "input": {
+      "action": "merge",
       "videoUrl": "https://example.com/video.mp4",
       "audioUrl": "https://example.com/audio.mp3"
     }
   }
   ```
 
+### Image to Parallax Video:
+**HTTP Request Node Configuration:**
+- **Method**: POST
+- **URL**: `https://api.runpod.ai/v2/{ENDPOINT_ID}/runsync`
+- **Headers**:
+  ```json
+  {
+    "Authorization": "Bearer YOUR_RUNPOD_API_KEY",
+    "Content-Type": "application/json"
+  }
+  ```
+- **Body**:
+  ```json
+  {
+    "input": {
+      "action": "parallax",
+      "imageUrl": "https://example.com/image.jpg",
+      "duration": 10
+    }
+  }
+  ```
+
 ### Response Handling:
-The response will contain base64-encoded video data:
+Both endpoints return the same format:
 ```json
 {
   "status": "COMPLETED",
   "output": {
     "video_data": "UklGRjIAAABXQVZFZm10...",
     "content_type": "video/mp4",
-    "size_bytes": 1234567
+    "size_bytes": 1234567,
+    "action": "merge" // or "parallax"
   }
 }
 ```
@@ -93,8 +118,10 @@ The handler uses several speed optimizations:
 - **local processing**: No intermediate uploads
 
 ## Expected Performance
-- **Processing time**: 5-15 seconds for 10-second videos
-- **Cost**: ~$0.02-0.05 per video
+- **Video merge**: 5-15 seconds for 10-second videos
+- **Parallax creation**: 8-20 seconds (depends on duration and image size)
+- **Cost per video merge**: ~$0.02-0.05 per video
+- **Cost per parallax video**: ~$0.03-0.08 per video
 - **Cold start**: 10-30 seconds (first request after idle)
 
 ## Troubleshooting
