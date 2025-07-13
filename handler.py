@@ -203,24 +203,20 @@ def create_parallax_video(image_url, duration, output_width=1920, output_height=
         target_aspect = output_width / output_height
         
         if needs_upscaling:
-            print(f"Image is smaller than target, creating zoom-out effect to hide black padding")
+            print(f"Image is smaller than target, scaling to fill frame properly")
             
-            # Strategy: Create a version that starts zoomed in (filling frame) 
-            # and slowly zooms out to show the full centered image
-            
-            # Calculate scaling to fill frame initially
+            # For small images: Scale to fill the output frame completely
+            # Calculate scale factor to fill frame (no black bars)
             if img_aspect > target_aspect:
-                # Image is wider - scale by height
-                fill_scale = output_height / img_height
+                # Image is wider relative to target - scale by height to fill
+                scale_width = int((img_width * output_height) / img_height)
+                scale_height = output_height
             else:
-                # Image is taller - scale by width  
-                fill_scale = output_width / img_width
+                # Image is taller relative to target - scale by width to fill
+                scale_width = output_width
+                scale_height = int((img_height * output_width) / img_width)
             
-            # Make sure we have enough room to zoom out
-            final_scale = fill_scale * 0.7  # End at 70% of fill scale
-            
-            scaled_width = int(img_width * fill_scale)
-            scaled_height = int(img_height * fill_scale)
+            print(f"Scaling {img_width}x{img_height} to {scale_width}x{scale_height} for {output_width}x{output_height} output")
             
             ffmpeg_cmd = [
                 'ffmpeg', '-y',
@@ -231,17 +227,17 @@ def create_parallax_video(image_url, duration, output_width=1920, output_height=
                 '-cq', '23',
                 '-pix_fmt', 'yuv420p',
                 '-vf', 
-                # Create static effect first - start filled, end centered
-                f'scale={scaled_width}:{scaled_height},'  # Scale to fill
-                f'pad={output_width}:{output_height}:(ow-iw)/2:(oh-ih)/2:color=black',  # Center with padding
+                # Scale to fill frame completely, then crop to exact size
+                f'scale={scale_width}:{scale_height},'
+                f'crop={output_width}:{output_height}:(iw-ow)/2:(ih-oh)/2',  # Crop from center
                 '-t', str(duration),
                 '-r', '30',
                 output_path
             ]
         else:
-            print(f"Image is large enough, creating subtle zoom effect")
+            print(f"Image is large enough, scaling and cropping normally")
             
-            # For large images: subtle zoom in effect
+            # For large images: Scale to fill and crop
             ffmpeg_cmd = [
                 'ffmpeg', '-y',
                 '-loop', '1',
@@ -251,8 +247,8 @@ def create_parallax_video(image_url, duration, output_width=1920, output_height=
                 '-cq', '23', 
                 '-pix_fmt', 'yuv420p',
                 '-vf',
-                f'scale={int(output_width * 1.1)}:{int(output_height * 1.1)}:force_original_aspect_ratio=increase,'
-                f'crop={output_width}:{output_height}',
+                f'scale={output_width}:{output_height}:force_original_aspect_ratio=increase,'
+                f'crop={output_width}:{output_height}:(iw-ow)/2:(ih-oh)/2',
                 '-t', str(duration),
                 '-r', '30',
                 output_path
