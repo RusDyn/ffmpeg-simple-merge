@@ -1,5 +1,5 @@
-# Use NVIDIA CUDA base image with Python
-FROM nvidia/cuda:12.1-devel-ubuntu22.04
+# Use NVIDIA CUDA base image with Ubuntu 22.04 and development tools
+FROM nvidia/cuda:12.1.1-cudnn8-devel-ubuntu22.04
 
 # Set environment variables
 ENV DEBIAN_FRONTEND=noninteractive
