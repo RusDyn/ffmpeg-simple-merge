@@ -70,7 +70,7 @@ def process_video(video_url, audio_url):
         final_duration = max(video_duration, audio_duration)
         print(f"Final output duration: {final_duration}s")
         
-        # Build FFmpeg command based on duration comparison
+        # Build FFmpeg command with GPU acceleration
         if audio_duration >= video_duration:
             # Audio is longer - slow down video and mix audio
             speed_factor = video_duration / audio_duration
@@ -78,13 +78,15 @@ def process_video(video_url, audio_url):
             
             ffmpeg_cmd = [
                 'ffmpeg', '-y',
+                '-hwaccel', 'cuda',  # GPU acceleration
+                '-hwaccel_output_format', 'cuda',
                 '-i', video_path,
                 '-i', audio_path,
-                '-c:v', 'libx264',
-                '-preset', 'ultrafast',  # Fastest encoding
-                '-crf', '28',  # Lower quality for speed
+                '-c:v', 'h264_nvenc',  # NVIDIA GPU encoder
+                '-preset', 'p1',  # Fastest GPU preset
+                '-cq', '28',  # Quality for NVENC
                 '-c:a', 'aac',
-                '-b:a', '128k',  # Lower audio bitrate
+                '-b:a', '128k',
                 '-filter_complex', 
                 f'[0:v]setpts=PTS*{1/speed_factor}[slowvideo];'
                 f'[0:a]atempo={speed_factor}[slowaudio];'
@@ -100,6 +102,7 @@ def process_video(video_url, audio_url):
             
             ffmpeg_cmd = [
                 'ffmpeg', '-y',
+                '-hwaccel', 'cuda',
                 '-i', video_path,
                 '-i', audio_path,
                 '-c:v', 'copy',  # Copy video stream (fastest)
