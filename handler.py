@@ -201,7 +201,7 @@ def create_parallax_video(image_url, duration, output_width=1920, output_height=
         if needs_upscaling:
             print(f"Image is smaller than target {target_width}x{target_height}, will center and scale")
             
-            # For small images: scale up maintaining aspect ratio, then pad to target size
+            # For small images: Use scale filter without zoompan to avoid errors
             ffmpeg_cmd = [
                 'ffmpeg', '-y',
                 '-loop', '1',
@@ -211,21 +211,17 @@ def create_parallax_video(image_url, duration, output_width=1920, output_height=
                 '-cq', '23',
                 '-pix_fmt', 'yuv420p',
                 '-vf', 
-                # Scale maintaining aspect ratio, pad with blur background, then zoom
-                f'scale={target_width}:{target_height}:force_original_aspect_ratio=decrease,'
-                f'pad={target_width}:{target_height}:(ow-iw)/2:(oh-ih)/2:color=black,'
-                f'zoompan=z=\'min(max(zoom,pzoom)+0.002,1.5)\':'
-                f's={output_width}x{output_height}:'
-                f'fps=30:'
-                f'd={int(duration * 30)}',
+                # Simple scale and center without zoom for now
+                f'scale={output_width}:{output_height}:force_original_aspect_ratio=decrease,'
+                f'pad={output_width}:{output_height}:(ow-iw)/2:(oh-ih)/2:color=black',
                 '-t', str(duration),
                 '-r', '30',
                 output_path
             ]
         else:
-            print(f"Image is large enough, will crop and zoom normally")
+            print(f"Image is large enough, will crop normally")
             
-            # For large images: scale to fill target size, then zoom
+            # For large images: Simple scale and crop
             ffmpeg_cmd = [
                 'ffmpeg', '-y',
                 '-loop', '1',
@@ -235,12 +231,8 @@ def create_parallax_video(image_url, duration, output_width=1920, output_height=
                 '-cq', '23',
                 '-pix_fmt', 'yuv420p',
                 '-vf', 
-                f'scale={target_width}:{target_height}:force_original_aspect_ratio=increase,'
-                f'crop={target_width}:{target_height},'
-                f'zoompan=z=\'min(max(zoom,pzoom)+0.002,1.5)\':'
-                f's={output_width}x{output_height}:'
-                f'fps=30:'
-                f'd={int(duration * 30)}',
+                f'scale={output_width}:{output_height}:force_original_aspect_ratio=increase,'
+                f'crop={output_width}:{output_height}',
                 '-t', str(duration),
                 '-r', '30',
                 output_path
