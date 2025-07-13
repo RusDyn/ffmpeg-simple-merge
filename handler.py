@@ -146,8 +146,27 @@ def process_video(video_url, audio_url):
         with open(output_path, 'rb') as f:
             output_data = f.read()
         
-def create_parallax_video(image_url, duration):
-    """Create a parallax video from an image"""
+def get_image_dimensions(image_path):
+    """Get image width and height using ffprobe"""
+    try:
+        cmd = [
+            'ffprobe', '-v', 'quiet', '-print_format', 'json',
+            '-show_streams', image_path
+        ]
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=10)
+        if result.returncode == 0:
+            import json
+            data = json.loads(result.stdout)
+            for stream in data['streams']:
+                if stream['codec_type'] == 'video':
+                    return int(stream['width']), int(stream['height'])
+        raise Exception(f"ffprobe failed: {result.stderr}")
+    except Exception as e:
+        print(f"Image dimension check failed: {e}")
+        raise
+
+def create_parallax_video(image_url, duration, output_width=1920, output_height=1080):
+    """Create a parallax video from an image with proper scaling"""
     job_id = str(uuid.uuid4())[:8]
     
     with tempfile.TemporaryDirectory() as temp_dir:
@@ -158,6 +177,7 @@ def create_parallax_video(image_url, duration):
         print(f"Parallax Job {job_id}: Starting image download and processing")
         print(f"Image URL: {image_url}")
         print(f"Duration: {duration}s")
+        print(f"Output resolution: {output_width}x{output_height}")
         
         # Download image
         if not download_file(image_url, image_path):
@@ -165,42 +185,66 @@ def create_parallax_video(image_url, duration):
         
         print(f"Job {job_id}: Image downloaded successfully")
         
-        # Create parallax video with slow zoom and pan effect
-        # Enhanced parallax with multiple movement options
+        # Get image dimensions
+        img_width, img_height = get_image_dimensions(image_path)
+        print(f"Image dimensions: {img_width}x{img_height}")
         
-        # Calculate total frames
-        fps = 30
-        total_frames = int(duration * fps)
+        # Calculate scaling for zoom effect
+        # We need extra room for zoom, so scale up by 150%
+        zoom_factor = 1.5
+        target_width = int(output_width * zoom_factor)
+        target_height = int(output_height * zoom_factor)
         
-        # Create complex parallax effect:
-        # 1. Slow zoom from 100% to 120%
-        # 2. Gentle pan from left to right
-        # 3. Slight vertical drift
+        # Determine if image is smaller than target
+        needs_upscaling = img_width < target_width or img_height < target_height
         
-        ffmpeg_cmd = [
-            'ffmpeg', '-y',
-            '-loop', '1',  # Loop the image
-            '-i', image_path,
-            '-c:v', 'h264_nvenc',  # GPU encoding
-            '-preset', 'p4',  # Good quality preset for NVENC
-            '-cq', '23',  # High quality
-            '-pix_fmt', 'yuv420p',  # Compatibility
-            '-vf', 
-            # Scale image larger than output for panning room
-            f'scale=2304:1296:force_original_aspect_ratio=increase,'  # 20% larger than 1920x1080
-            f'crop=2304:1296,'  # Crop to exact size
-            # Zoompan filter for parallax effect
-            f'zoompan='
-            f'z=\'1+0.2*sin(2*PI*t/{duration})\':'  # Subtle breathing zoom
-            f'x=\'iw/2-(iw/zoom/2)+50*sin(2*PI*t/{duration})\':'  # Horizontal pan
-            f'y=\'ih/2-(ih/zoom/2)+20*sin(PI*t/{duration})\':'  # Gentle vertical drift
-            f's=1920x1080:'  # Output size
-            f'fps=30:'
-            f'd={total_frames}',
-            '-t', str(duration),
-            '-r', '30',  # 30 fps
-            output_path
-        ]
+        if needs_upscaling:
+            print(f"Image is smaller than target {target_width}x{target_height}, will center and scale")
+            
+            # For small images: scale up maintaining aspect ratio, then pad to target size
+            ffmpeg_cmd = [
+                'ffmpeg', '-y',
+                '-loop', '1',
+                '-i', image_path,
+                '-c:v', 'h264_nvenc',
+                '-preset', 'p4',
+                '-cq', '23',
+                '-pix_fmt', 'yuv420p',
+                '-vf', 
+                # Scale maintaining aspect ratio, pad with blur background, then zoom
+                f'scale={target_width}:{target_height}:force_original_aspect_ratio=decrease,'
+                f'pad={target_width}:{target_height}:(ow-iw)/2:(oh-ih)/2:color=black,'
+                f'zoompan=z=\'min(max(zoom,pzoom)+0.002,1.5)\':'
+                f's={output_width}x{output_height}:'
+                f'fps=30:'
+                f'd={int(duration * 30)}',
+                '-t', str(duration),
+                '-r', '30',
+                output_path
+            ]
+        else:
+            print(f"Image is large enough, will crop and zoom normally")
+            
+            # For large images: scale to fill target size, then zoom
+            ffmpeg_cmd = [
+                'ffmpeg', '-y',
+                '-loop', '1',
+                '-i', image_path,
+                '-c:v', 'h264_nvenc',
+                '-preset', 'p4',
+                '-cq', '23',
+                '-pix_fmt', 'yuv420p',
+                '-vf', 
+                f'scale={target_width}:{target_height}:force_original_aspect_ratio=increase,'
+                f'crop={target_width}:{target_height},'
+                f'zoompan=z=\'min(max(zoom,pzoom)+0.002,1.5)\':'
+                f's={output_width}x{output_height}:'
+                f'fps=30:'
+                f'd={int(duration * 30)}',
+                '-t', str(duration),
+                '-r', '30',
+                output_path
+            ]
         
         print(f"Job {job_id}: Starting FFmpeg parallax processing...")
         print(f"Command: {' '.join(ffmpeg_cmd)}")
@@ -281,6 +325,8 @@ def handler(event):
             # Image to parallax video functionality
             image_url = input_data.get("imageUrl")
             duration = input_data.get("duration", 10)  # Default 10 seconds
+            width = input_data.get("width", 1920)  # Default 1920x1080
+            height = input_data.get("height", 1080)
             
             if not image_url:
                 return {
@@ -299,6 +345,19 @@ def handler(event):
                     "error": "Invalid duration format"
                 }
             
+            # Validate resolution
+            try:
+                width = int(width)
+                height = int(height)
+                if width < 480 or width > 4096 or height < 320 or height > 4096:
+                    return {
+                        "error": "Resolution must be between 480x320 and 4096x4096"
+                    }
+            except (ValueError, TypeError):
+                return {
+                    "error": "Invalid resolution format"
+                }
+            
             # Validate URL
             try:
                 urlparse(image_url)
@@ -308,7 +367,7 @@ def handler(event):
                 }
             
             # Create parallax video
-            output_data = create_parallax_video(image_url, duration)
+            output_data = create_parallax_video(image_url, duration, width, height)
             
             # Return base64 encoded result
             import base64
@@ -320,7 +379,8 @@ def handler(event):
                     "content_type": "video/mp4",
                     "size_bytes": len(output_data),
                     "action": "parallax",
-                    "duration": duration
+                    "duration": duration,
+                    "resolution": f"{width}x{height}"
                 }
             }
             

@@ -89,10 +89,16 @@ docker push your-username/video-merger:latest
     "input": {
       "action": "parallax",
       "imageUrl": "https://example.com/image.jpg",
-      "duration": 10
+      "duration": 10,
+      "width": 1920,
+      "height": 1080
     }
   }
   ```
+  **Optional parameters:**
+  - `width` (default: 1920): Output video width (480-4096)
+  - `height` (default: 1080): Output video height (320-4096)
+  - `duration` (default: 10): Video duration in seconds (0-60)
 
 ### Response Handling:
 Both endpoints return the same format:
