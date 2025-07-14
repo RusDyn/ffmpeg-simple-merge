@@ -40,112 +40,127 @@ def get_media_duration(file_path):
 def process_video(video_url, audio_url):
     """Main video processing function"""
     job_id = str(uuid.uuid4())[:8]
+    print(f"Job {job_id}: Starting process_video function")
     
-    with tempfile.TemporaryDirectory() as temp_dir:
-        # File paths
-        video_path = os.path.join(temp_dir, f"video_{job_id}.mp4")
-        audio_path = os.path.join(temp_dir, f"audio_{job_id}.mp3")
-        output_path = os.path.join(temp_dir, f"output_{job_id}.mp4")
-        
-        print(f"Job {job_id}: Starting download and processing")
-        print(f"Video URL: {video_url}")
-        print(f"Audio URL: {audio_url}")
-        
-        # Download files
-        if not download_file(video_url, video_path):
-            raise Exception("Failed to download video file")
-        
-        if not download_file(audio_url, audio_path):
-            raise Exception("Failed to download audio file")
-        
-        print(f"Job {job_id}: Files downloaded successfully")
-        
-        # Get durations
-        video_duration = get_media_duration(video_path)
-        audio_duration = get_media_duration(audio_path)
-        
-        print(f"Video duration: {video_duration}s")
-        print(f"Audio duration: {audio_duration}s")
-        
-        final_duration = max(video_duration, audio_duration)
-        print(f"Final output duration: {final_duration}s")
-        
-        # Build FFmpeg command with GPU acceleration
-        if audio_duration >= video_duration:
-            # Audio is longer - slow down video and mix audio
-            speed_factor = video_duration / audio_duration
-            print(f"Audio is longer. Slowing down video with factor: {speed_factor}")
+    try:
+        with tempfile.TemporaryDirectory() as temp_dir:
+            print(f"Job {job_id}: Created temp directory: {temp_dir}")
             
-            ffmpeg_cmd = [
-                'ffmpeg', '-y',
-                '-hwaccel', 'cuda',  # GPU acceleration
-                '-hwaccel_output_format', 'cuda',
-                '-i', video_path,
-                '-i', audio_path,
-                '-c:v', 'h264_nvenc',  # NVIDIA GPU encoder
-                '-preset', 'p1',  # Fastest GPU preset
-                '-cq', '28',  # Quality for NVENC
-                '-c:a', 'aac',
-                '-b:a', '128k',
-                '-filter_complex', 
-                f'[0:v]setpts=PTS*{1/speed_factor}[slowvideo];'
-                f'[0:a]atempo={speed_factor}[slowaudio];'
-                f'[slowaudio][1:a]amix=inputs=2:duration=longest[mixedaudio]',
-                '-map', '[slowvideo]',
-                '-map', '[mixedaudio]',
-                '-t', str(audio_duration),
-                output_path
-            ]
-        else:
-            # Video is longer - keep video speed, mix audio
-            print("Video is longer. Keeping video speed, mixing audio tracks")
+            # File paths
+            video_path = os.path.join(temp_dir, f"video_{job_id}.mp4")
+            audio_path = os.path.join(temp_dir, f"audio_{job_id}.mp3")
+            output_path = os.path.join(temp_dir, f"output_{job_id}.mp4")
             
-            ffmpeg_cmd = [
-                'ffmpeg', '-y',
-                '-hwaccel', 'cuda',
-                '-i', video_path,
-                '-i', audio_path,
-                '-c:v', 'copy',  # Copy video stream (fastest)
-                '-c:a', 'aac',
-                '-b:a', '128k',
-                '-filter_complex', '[0:a][1:a]amix=inputs=2:duration=first[mixedaudio]',
-                '-map', '0:v:0',
-                '-map', '[mixedaudio]',
-                '-t', str(video_duration),
-                output_path
-            ]
-        
-        print(f"Job {job_id}: Starting FFmpeg processing...")
-        print(f"Command: {' '.join(ffmpeg_cmd)}")
-        
-        # Run FFmpeg
-        result = subprocess.run(
-            ffmpeg_cmd, 
-            capture_output=True, 
-            text=True, 
-            timeout=120  # 2 minute timeout
-        )
-        
-        if result.returncode != 0:
-            print(f"FFmpeg stderr: {result.stderr}")
-            raise Exception(f"FFmpeg processing failed: {result.stderr}")
-        
-        print(f"Job {job_id}: Processing completed successfully")
-        
-        # Check output file
-        if not os.path.exists(output_path):
-            raise Exception("Output file was not created")
-        
-        output_size = os.path.getsize(output_path)
-        if output_size == 0:
-            raise Exception("Output file is empty")
-        
-        print(f"Output file size: {output_size} bytes")
-        
-        # Read output file
-        with open(output_path, 'rb') as f:
-            output_data = f.read()
-        
+            print(f"Job {job_id}: Video URL: {video_url}")
+            print(f"Job {job_id}: Audio URL: {audio_url}")
+            
+            # Download files
+            print(f"Job {job_id}: Downloading video...")
+            if not download_file(video_url, video_path):
+                raise Exception("Failed to download video file")
+            
+            print(f"Job {job_id}: Downloading audio...")
+            if not download_file(audio_url, audio_path):
+                raise Exception("Failed to download audio file")
+            
+            print(f"Job {job_id}: Files downloaded successfully")
+            
+            # Verify files
+            video_size = os.path.getsize(video_path)
+            audio_size = os.path.getsize(audio_path)
+            print(f"Job {job_id}: Video file size: {video_size} bytes")
+            print(f"Job {job_id}: Audio file size: {audio_size} bytes")
+            
+            # Get durations
+            video_duration = get_media_duration(video_path)
+            audio_duration = get_media_duration(audio_path)
+            print(f"Job {job_id}: Video duration: {video_duration}s")
+            print(f"Job {job_id}: Audio duration: {audio_duration}s")
+            
+            # Build FFmpeg command
+            if audio_duration >= video_duration:
+                speed_factor = video_duration / audio_duration
+                print(f"Job {job_id}: Audio is longer, slowing video by factor: {speed_factor}")
+                
+                ffmpeg_cmd = [
+                    'ffmpeg', '-y',
+                    '-hwaccel', 'cuda',  # GPU acceleration
+                    '-hwaccel_output_format', 'cuda',
+                    '-i', video_path,
+                    '-i', audio_path,
+                    '-c:v', 'h264_nvenc',
+                    '-preset', 'p1',
+                    '-cq', '28',
+                    '-c:a', 'aac',
+                    '-b:a', '128k',
+                    '-filter_complex', 
+                    f'[0:v]setpts=PTS*{1/speed_factor}[slowvideo];'
+                    f'[0:a]atempo={speed_factor}[slowaudio];'
+                    f'[slowaudio][1:a]amix=inputs=2:duration=longest[mixedaudio]',
+                    '-map', '[slowvideo]',
+                    '-map', '[mixedaudio]',
+                    '-t', str(audio_duration),
+                    output_path
+                ]
+            else:
+                print(f"Job {job_id}: Video is longer, mixing audio")
+                
+                ffmpeg_cmd = [
+                    'ffmpeg', '-y',
+                    '-hwaccel', 'cuda',
+                    '-i', video_path,
+                    '-i', audio_path,
+                    '-c:v', 'copy',
+                    '-c:a', 'aac',
+                    '-b:a', '128k',
+                    '-filter_complex', '[0:a][1:a]amix=inputs=2:duration=first[mixedaudio]',
+                    '-map', '0:v:0',
+                    '-map', '[mixedaudio]',
+                    '-t', str(video_duration),
+                    output_path
+                ]
+            
+            print(f"Job {job_id}: Starting FFmpeg...")
+            print(f"Command: {' '.join(ffmpeg_cmd)}")
+            
+            # Run FFmpeg
+            result = subprocess.run(ffmpeg_cmd, capture_output=True, text=True, timeout=120)
+            
+            if result.returncode != 0:
+                print(f"Job {job_id}: FFmpeg failed: {result.stderr}")
+                raise Exception(f"FFmpeg processing failed: {result.stderr}")
+            
+            print(f"Job {job_id}: FFmpeg completed successfully")
+            
+            # Check output file
+            if not os.path.exists(output_path):
+                raise Exception("Output file was not created")
+            
+            output_size = os.path.getsize(output_path)
+            if output_size == 0:
+                raise Exception("Output file is empty")
+            
+            print(f"Job {job_id}: Output file size: {output_size} bytes")
+            
+            # Read file content
+            print(f"Job {job_id}: Reading output file...")
+            with open(output_path, 'rb') as f:
+                file_data = f.read()
+            
+            print(f"Job {job_id}: Read {len(file_data)} bytes from file")
+            
+            if not file_data:
+                raise Exception("File data is empty")
+            
+            print(f"Job {job_id}: Returning {len(file_data)} bytes")
+            return file_data
+    
+    except Exception as e:
+        print(f"Job {job_id}: ERROR - {str(e)}")
+        import traceback
+        print(f"Job {job_id}: Traceback: {traceback.format_exc()}")
+        raise
+
 def get_image_dimensions(image_path):
     """Get image width and height using ffprobe"""
     try:
@@ -266,7 +281,9 @@ def handler(event):
                 }
             
             # Process video
+            print("Calling process_video function...")
             output_data = process_video(video_url, audio_url)
+            print(f"process_video returned: {type(output_data)}, length: {len(output_data) if output_data else 'None'}")
             
             # Validate output_data before encoding
             if output_data is None:
@@ -289,9 +306,11 @@ def handler(event):
             # Return base64 encoded result
             import base64
             try:
+                print("Starting base64 encoding...")
                 output_b64 = base64.b64encode(output_data).decode('utf-8')
                 print(f"Base64 encoding successful, encoded {len(output_b64)} characters")
             except Exception as e:
+                print(f"Base64 encoding error: {str(e)}")
                 return {
                     "error": f"Base64 encoding failed: {str(e)}"
                 }
