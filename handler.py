@@ -268,9 +268,33 @@ def handler(event):
             # Process video
             output_data = process_video(video_url, audio_url)
             
+            # Validate output_data before encoding
+            if output_data is None:
+                return {
+                    "error": "Video processing returned no data"
+                }
+            
+            if not isinstance(output_data, bytes):
+                return {
+                    "error": f"Video processing returned invalid data type: {type(output_data)}"
+                }
+            
+            if len(output_data) == 0:
+                return {
+                    "error": "Video processing returned empty data"
+                }
+            
+            print(f"Processing successful, got {len(output_data)} bytes of video data")
+            
             # Return base64 encoded result
             import base64
-            output_b64 = base64.b64encode(output_data).decode('utf-8')
+            try:
+                output_b64 = base64.b64encode(output_data).decode('utf-8')
+                print(f"Base64 encoding successful, encoded {len(output_b64)} characters")
+            except Exception as e:
+                return {
+                    "error": f"Base64 encoding failed: {str(e)}"
+                }
             
             return {
                 "output": {
