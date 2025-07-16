@@ -37,7 +37,7 @@ def get_media_duration(file_path):
         print(f"Duration check failed: {e}")
         raise
 
-def process_video(video_url, audio_url):
+def process_video(video_url, audio_url, video_volume=1.0, audio_volume=1.0):
     """Main video processing function"""
     job_id = str(uuid.uuid4())[:8]
     print(f"Job {job_id}: Starting process_video function")
@@ -95,8 +95,9 @@ def process_video(video_url, audio_url):
                     '-b:a', '128k',
                     '-filter_complex', 
                     f'[0:v]setpts=PTS*{1/speed_factor}[slowvideo];'
-                    f'[0:a]atempo={speed_factor}[slowaudio];'
-                    f'[slowaudio][1:a]amix=inputs=2:duration=longest[mixedaudio]',
+                    f'[0:a]atempo={speed_factor},volume={video_volume}[slowaudio];'
+                    f'[1:a]volume={audio_volume}[newaudio];'
+                    f'[slowaudio][newaudio]amix=inputs=2:duration=longest:weights=0.5 0.5[mixedaudio]',
                     '-map', '[slowvideo]',
                     '-map', '[mixedaudio]',
                     '-t', str(audio_duration),
@@ -113,7 +114,7 @@ def process_video(video_url, audio_url):
                     '-c:v', 'copy',
                     '-c:a', 'aac',
                     '-b:a', '128k',
-                    '-filter_complex', '[0:a][1:a]amix=inputs=2:duration=first[mixedaudio]',
+                    '-filter_complex', f'[0:a]volume={video_volume}[originalvol];[1:a]volume={audio_volume}[newvol];[originalvol][newvol]amix=inputs=2:duration=first:weights=0.5 0.5[mixedaudio]',
                     '-map', '0:v:0',
                     '-map', '[mixedaudio]',
                     '-t', str(video_duration),
@@ -265,6 +266,8 @@ def handler(event):
             # Video + Audio merging functionality
             video_url = input_data.get("videoUrl")
             audio_url = input_data.get("audioUrl")
+            video_volume = input_data.get("videoVolume", 1.0)
+            audio_volume = input_data.get("audioVolume", 1.0)
             
             if not video_url or not audio_url:
                 return {
@@ -280,9 +283,22 @@ def handler(event):
                     "error": "Invalid URL format"
                 }
             
+            # Validate volume parameters
+            try:
+                video_volume = float(video_volume)
+                audio_volume = float(audio_volume)
+                if video_volume < 0 or video_volume > 2 or audio_volume < 0 or audio_volume > 2:
+                    return {
+                        "error": "Volume values must be between 0 and 2"
+                    }
+            except (ValueError, TypeError):
+                return {
+                    "error": "Invalid volume format"
+                }
+            
             # Process video
             print("Calling process_video function...")
-            output_data = process_video(video_url, audio_url)
+            output_data = process_video(video_url, audio_url, video_volume, audio_volume)
             print(f"process_video returned: {type(output_data)}, length: {len(output_data) if output_data else 'None'}")
             
             # Validate output_data before encoding

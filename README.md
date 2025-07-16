@@ -9,6 +9,8 @@ A high-performance, GPU-accelerated video processing service that runs on RunPod
 
 - **GPU-accelerated processing** using NVIDIA CUDA and h264_nvenc
 - **Automatic duration matching** for video/audio sync
+- **Audio volume control** with independent video and audio volume adjustment
+- **Balanced audio mixing** with equal levels by default
 - **Flexible resolution support** (480x320 to 4096x4096)
 - **Base64 encoded output** for easy integration
 - **Optimized for speed** with ultrafast presets and efficient filtering
@@ -87,7 +89,9 @@ curl -X POST https://api.runpod.ai/v2/{ENDPOINT_ID}/runsync \
     "input": {
       "action": "merge",
       "videoUrl": "https://example.com/video.mp4",
-      "audioUrl": "https://example.com/audio.mp3"
+      "audioUrl": "https://example.com/audio.mp3",
+      "videoVolume": 0.8,
+      "audioVolume": 1.2
     }
   }'
 ```
@@ -98,7 +102,7 @@ curl -X POST https://api.runpod.ai/v2/{ENDPOINT_ID}/runsync \
 import requests
 import base64
 
-def merge_video_audio(video_url, audio_url, endpoint_id, api_key):
+def merge_video_audio(video_url, audio_url, endpoint_id, api_key, video_volume=1.0, audio_volume=1.0):
     url = f"https://api.runpod.ai/v2/{endpoint_id}/runsync"
     headers = {
         "Authorization": f"Bearer {api_key}",
@@ -108,7 +112,9 @@ def merge_video_audio(video_url, audio_url, endpoint_id, api_key):
         "input": {
             "action": "merge",
             "videoUrl": video_url,
-            "audioUrl": audio_url
+            "audioUrl": audio_url,
+            "videoVolume": video_volume,
+            "audioVolume": audio_volume
         }
     }
     
@@ -134,14 +140,16 @@ merge_video_audio(
     "https://example.com/video.mp4",
     "https://example.com/audio.mp3",
     "your-endpoint-id",
-    "your-api-key"
+    "your-api-key",
+    video_volume=0.8,  # Reduce original video audio
+    audio_volume=1.2   # Boost additional audio
 )
 ```
 
 #### JavaScript Example
 
 ```javascript
-async function mergeVideoAudio(videoUrl, audioUrl, endpointId, apiKey) {
+async function mergeVideoAudio(videoUrl, audioUrl, endpointId, apiKey, videoVolume = 1.0, audioVolume = 1.0) {
     const response = await fetch(`https://api.runpod.ai/v2/${endpointId}/runsync`, {
         method: 'POST',
         headers: {
@@ -152,7 +160,9 @@ async function mergeVideoAudio(videoUrl, audioUrl, endpointId, apiKey) {
             input: {
                 action: 'merge',
                 videoUrl: videoUrl,
-                audioUrl: audioUrl
+                audioUrl: audioUrl,
+                videoVolume: videoVolume,
+                audioVolume: audioVolume
             }
         })
     });
@@ -177,6 +187,31 @@ async function mergeVideoAudio(videoUrl, audioUrl, endpointId, apiKey) {
         return null;
     }
 }
+```
+
+#### Volume Control
+
+The merge action supports independent volume control for both the original video audio and the additional audio track:
+
+- **videoVolume**: Controls the volume of the original video's audio track (default: 1.0)
+- **audioVolume**: Controls the volume of the additional audio file (default: 1.0)
+- **Range**: Both values accept 0.0 to 2.0 (0 = muted, 1.0 = original volume, 2.0 = double volume)
+- **Default Behavior**: Both audio tracks are mixed with equal weighting (0.5 each) to prevent audio clipping
+
+**Example with custom volumes:**
+```bash
+curl -X POST https://api.runpod.ai/v2/{ENDPOINT_ID}/runsync \
+  -H "Authorization: Bearer YOUR_RUNPOD_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "input": {
+      "action": "merge",
+      "videoUrl": "https://example.com/video.mp4",
+      "audioUrl": "https://example.com/music.mp3",
+      "videoVolume": 0.3,
+      "audioVolume": 0.7
+    }
+  }'
 ```
 
 ### Image to Parallax Video
@@ -273,7 +308,9 @@ For n8n workflow automation:
     "input": {
       "action": "merge",
       "videoUrl": "{{$json.videoUrl}}",
-      "audioUrl": "{{$json.audioUrl}}"
+      "audioUrl": "{{$json.audioUrl}}",
+      "videoVolume": "{{$json.videoVolume}}",
+      "audioVolume": "{{$json.audioVolume}}"
     }
   }
   ```
@@ -313,7 +350,9 @@ For n8n workflow automation:
   "input": {
     "action": "merge",
     "videoUrl": "string (required)",
-    "audioUrl": "string (required)"
+    "audioUrl": "string (required)",
+    "videoVolume": "number (optional, default: 1.0, range: 0-2)",
+    "audioVolume": "number (optional, default: 1.0, range: 0-2)"
   }
 }
 ```
@@ -486,7 +525,9 @@ merge_event = {
     "input": {
         "action": "merge",
         "videoUrl": "https://example.com/test.mp4",
-        "audioUrl": "https://example.com/test.mp3"
+        "audioUrl": "https://example.com/test.mp3",
+        "videoVolume": 0.8,
+        "audioVolume": 1.2
     }
 }
 
