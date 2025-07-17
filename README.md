@@ -2,15 +2,16 @@
 
 A high-performance, GPU-accelerated video processing service that runs on RunPod serverless infrastructure. This service provides two main functionalities:
 
-1. **Video + Audio Merging**: Combine video and audio files with automatic duration matching
+1. **Video + Audio Merging**: Combine video and audio files with automatic duration matching and independent volume control
 2. **Image to Parallax Video**: Convert static images into dynamic video content
 
 ## 🚀 Features
 
 - **GPU-accelerated processing** using NVIDIA CUDA and h264_nvenc
 - **Automatic duration matching** for video/audio sync
-- **Audio volume control** with independent video and audio volume adjustment
-- **Balanced audio mixing** with equal levels by default
+- **Independent volume control** for video and audio tracks during merge
+- **Flexible audio mixing** with customizable volume levels (0-2x)
+- **Smart audio balancing** to prevent clipping when mixing tracks
 - **Flexible resolution support** (480x320 to 4096x4096)
 - **Base64 encoded output** for easy integration
 - **Optimized for speed** with ultrafast presets and efficient filtering
@@ -21,7 +22,11 @@ A high-performance, GPU-accelerated video processing service that runs on RunPod
 ```
 ffmpeg-simple-merge/
 ├── handler.py          # Main serverless handler
-├── requirements.txt    # Python dependencies
+├── merge.py           # Video/audio merging logic
+├── parallax.py        # Image to video conversion
+├── validators.py      # Input validation
+├── utils.py           # Shared utilities
+├── requirements.txt   # Python dependencies
 ├── Dockerfile         # Container configuration
 ├── README.md          # This documentation
 └── CLAUDE.md          # Claude Code guidance
@@ -77,7 +82,7 @@ docker push your-username/ffmpeg-simple-merge:latest
 
 ### Video + Audio Merge
 
-Merge a video file with an audio file, automatically handling duration mismatches:
+Merge a video file with an audio file, automatically handling duration mismatches and providing independent volume control for both tracks:
 
 #### cURL Example
 
@@ -189,16 +194,21 @@ async function mergeVideoAudio(videoUrl, audioUrl, endpointId, apiKey, videoVolu
 }
 ```
 
-#### Volume Control
+#### Volume Control Features
 
-The merge action supports independent volume control for both the original video audio and the additional audio track:
+The merge action provides sophisticated volume control for professional audio mixing:
 
-- **videoVolume**: Controls the volume of the original video's audio track (default: 1.0)
-- **audioVolume**: Controls the volume of the additional audio file (default: 1.0)
-- **Range**: Both values accept 0.0 to 2.0 (0 = muted, 1.0 = original volume, 2.0 = double volume)
-- **Default Behavior**: Both audio tracks are mixed with equal weighting (0.5 each) to prevent audio clipping
+- **videoVolume**: Controls the original video's audio track volume (default: 1.0)
+- **audioVolume**: Controls the additional audio file volume (default: 1.0)
+- **Range**: 0.0 to 2.0 (0 = muted, 1.0 = original, 2.0 = double volume)
+- **Smart Mixing**: Automatically balances audio levels to prevent clipping
+- **Use Cases**:
+  - Background music: Set `videoVolume: 1.0, audioVolume: 0.3`
+  - Voice-over: Set `videoVolume: 0.2, audioVolume: 1.0`
+  - Equal mix: Set both to `1.0` (auto-balanced to 0.5 each)
+  - Replace audio: Set `videoVolume: 0.0, audioVolume: 1.0`
 
-**Example with custom volumes:**
+**Example - Adding background music:**
 ```bash
 curl -X POST https://api.runpod.ai/v2/{ENDPOINT_ID}/runsync \
   -H "Authorization: Bearer YOUR_RUNPOD_API_KEY" \
@@ -207,9 +217,25 @@ curl -X POST https://api.runpod.ai/v2/{ENDPOINT_ID}/runsync \
     "input": {
       "action": "merge",
       "videoUrl": "https://example.com/video.mp4",
-      "audioUrl": "https://example.com/music.mp3",
-      "videoVolume": 0.3,
-      "audioVolume": 0.7
+      "audioUrl": "https://example.com/background-music.mp3",
+      "videoVolume": 1.0,
+      "audioVolume": 0.3
+    }
+  }'
+```
+
+**Example - Voice-over narration:**
+```bash
+curl -X POST https://api.runpod.ai/v2/{ENDPOINT_ID}/runsync \
+  -H "Authorization: Bearer YOUR_RUNPOD_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "input": {
+      "action": "merge",
+      "videoUrl": "https://example.com/video.mp4",
+      "audioUrl": "https://example.com/narration.mp3",
+      "videoVolume": 0.2,
+      "audioVolume": 1.0
     }
   }'
 ```

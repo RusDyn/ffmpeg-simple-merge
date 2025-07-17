@@ -54,10 +54,22 @@ This is a **RunPod serverless handler** for video processing that provides two m
 
 ### Key Components
 
-- **`handler.py`**: Main serverless handler with two processing functions
-  - `process_video()`: Handles video+audio merging with speed adjustment
+- **`handler.py`**: Main serverless handler with action routing
+  - Routes requests to appropriate processing modules
+  - Handles base64 encoding and response formatting
+  - RunPod entry point
+
+- **`merge.py`**: Video and audio merging functionality
+  - `merge_video_audio()`: Handles video+audio merging with speed adjustment
+  - Independent volume control for both tracks
+  - Automatic duration matching
+
+- **`parallax.py`**: Image to video conversion
   - `create_parallax_video()`: Creates static video from image
-  - `handler()`: RunPod entry point with action routing
+  - Configurable resolution and duration
+
+- **`validators.py`**: Input validation for all actions
+- **`utils.py`**: Shared utility functions
 
 - **FFmpeg Processing**: Uses CUDA acceleration with optimized presets
   - Hardware acceleration: `h264_nvenc` codec with CUDA

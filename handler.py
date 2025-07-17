@@ -1,7 +1,8 @@
 """RunPod serverless handler for video processing"""
 import runpod
 import base64
-from processors import VideoProcessor, ParallaxProcessor
+from merge import merge_video_audio
+from parallax import create_parallax_video
 from validators import InputValidator
 
 
@@ -20,14 +21,14 @@ def handler(event):
                 return {"error": error_msg}
             
             # Process video
-            print("Calling process_video function...")
-            output_data = VideoProcessor.process_video(
+            print("Calling merge_video_audio function...")
+            output_data = merge_video_audio(
                 validated_inputs["video_url"],
                 validated_inputs["audio_url"],
                 validated_inputs["video_volume"],
                 validated_inputs["audio_volume"]
             )
-            print(f"process_video returned: {type(output_data)}, length: {len(output_data) if output_data else 'None'}")
+            print(f"merge_video_audio returned: {type(output_data)}, length: {len(output_data) if output_data else 'None'}")
             
             # Validate output_data before encoding
             if output_data is None:
@@ -75,7 +76,7 @@ def handler(event):
                 return {"error": error_msg}
             
             # Create parallax video
-            output_data = ParallaxProcessor.create_parallax_video(
+            output_data = create_parallax_video(
                 validated_inputs["image_url"],
                 validated_inputs["duration"],
                 validated_inputs["width"],
