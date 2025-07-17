@@ -1,8 +1,8 @@
 """Image to parallax video conversion functionality"""
-import subprocess
 import tempfile
 import os
 from utils import download_file, get_image_dimensions, generate_job_id
+from ffmpeg_utils import get_nvenc_params, execute_ffmpeg_pipeline
 
 
 def create_parallax_video(image_url, duration, output_width=1920, output_height=1080):
@@ -43,49 +43,26 @@ def create_parallax_video(image_url, duration, output_width=1920, output_height=
         # Simple approach - just scale to exact output size
         print(f"Scaling {img_width}x{img_height} to {output_width}x{output_height}")
         
+        # Build FFmpeg command
         ffmpeg_cmd = [
             'ffmpeg', '-y',
             '-loop', '1',
-            '-i', image_path,
-            '-c:v', 'h264_nvenc',
-            '-preset', 'p4', 
-            '-cq', '23',
-            '-pix_fmt', 'yuv420p',
+            '-i', image_path
+        ]
+        
+        # Add NVENC encoding parameters
+        ffmpeg_cmd.extend(get_nvenc_params(preset='p4', cq=23))
+        
+        # Add video processing parameters
+        ffmpeg_cmd.extend([
             '-vf', f'scale={output_width}:{output_height}',  # Simple scale
             '-t', str(duration),
             '-r', '30',
             output_path
-        ]
+        ])
         
-        print(f"Job {job_id}: Starting FFmpeg parallax processing...")
-        print(f"Command: {' '.join(ffmpeg_cmd)}")
-        
-        # Run FFmpeg
-        result = subprocess.run(
-            ffmpeg_cmd, 
-            capture_output=True, 
-            text=True, 
-            timeout=duration * 10 + 30  # Timeout based on duration
-        )
-        
-        if result.returncode != 0:
-            print(f"FFmpeg stderr: {result.stderr}")
-            raise Exception(f"FFmpeg parallax processing failed: {result.stderr}")
-        
-        print(f"Job {job_id}: Parallax processing completed successfully")
-        
-        # Check output file
-        if not os.path.exists(output_path):
-            raise Exception("Output parallax video was not created")
-        
-        output_size = os.path.getsize(output_path)
-        if output_size == 0:
-            raise Exception("Output parallax video is empty")
-        
-        print(f"Parallax output file size: {output_size} bytes")
-        
-        # Read output file
-        with open(output_path, 'rb') as f:
-            output_data = f.read()
+        # Execute FFmpeg pipeline with dynamic timeout
+        timeout = duration * 10 + 30  # Timeout based on duration
+        output_data = execute_ffmpeg_pipeline(ffmpeg_cmd, output_path, timeout=timeout, job_id=job_id)
         
         return output_data

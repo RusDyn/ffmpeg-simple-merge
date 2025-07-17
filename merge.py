@@ -1,9 +1,8 @@
 """Video and audio merging functionality"""
-import subprocess
 import tempfile
 import os
-import base64
 from utils import download_file, get_media_duration, generate_job_id
+from ffmpeg_utils import build_base_command, get_nvenc_params, execute_ffmpeg_pipeline
 
 
 def merge_video_audio(video_url, audio_url, video_volume=1.0, audio_volume=1.0):
@@ -64,37 +63,8 @@ def merge_video_audio(video_url, audio_url, video_volume=1.0, audio_volume=1.0):
                 video_volume, audio_volume, job_id
             )
             
-            print(f"Job {job_id}: Starting FFmpeg...")
-            print(f"Command: {' '.join(ffmpeg_cmd)}")
-            
-            # Run FFmpeg
-            result = subprocess.run(ffmpeg_cmd, capture_output=True, text=True, timeout=120)
-            
-            if result.returncode != 0:
-                print(f"Job {job_id}: FFmpeg failed: {result.stderr}")
-                raise Exception(f"FFmpeg processing failed: {result.stderr}")
-            
-            print(f"Job {job_id}: FFmpeg completed successfully")
-            
-            # Check output file
-            if not os.path.exists(output_path):
-                raise Exception("Output file was not created")
-            
-            output_size = os.path.getsize(output_path)
-            if output_size == 0:
-                raise Exception("Output file is empty")
-            
-            print(f"Job {job_id}: Output file size: {output_size} bytes")
-            
-            # Read file content
-            print(f"Job {job_id}: Reading output file...")
-            with open(output_path, 'rb') as f:
-                file_data = f.read()
-            
-            print(f"Job {job_id}: Read {len(file_data)} bytes from file")
-            
-            if not file_data:
-                raise Exception("File data is empty")
+            # Execute FFmpeg pipeline
+            file_data = execute_ffmpeg_pipeline(ffmpeg_cmd, output_path, timeout=120, job_id=job_id)
             
             print(f"Job {job_id}: Returning {len(file_data)} bytes")
             return file_data
@@ -113,15 +83,14 @@ def _build_merge_command(video_path, audio_path, output_path, video_duration,
         speed_factor = video_duration / audio_duration
         print(f"Job {job_id}: Audio is longer, slowing video by factor: {speed_factor}")
         
-        return [
-            'ffmpeg', '-y',
-            '-hwaccel', 'cuda',  # GPU acceleration
-            '-hwaccel_output_format', 'cuda',
-            '-i', video_path,
-            '-i', audio_path,
-            '-c:v', 'h264_nvenc',
-            '-preset', 'p1',
-            '-cq', '28',
+        # Build base command with CUDA acceleration
+        cmd = build_base_command([video_path, audio_path], use_cuda=True)
+        
+        # Add NVENC video encoding params
+        cmd.extend(get_nvenc_params(preset='p1', cq=28))
+        
+        # Add audio encoding and complex filter
+        cmd.extend([
             '-c:a', 'aac',
             '-b:a', '128k',
             '-filter_complex', 
@@ -133,15 +102,17 @@ def _build_merge_command(video_path, audio_path, output_path, video_duration,
             '-map', '[mixedaudio]',
             '-t', str(audio_duration),
             output_path
-        ]
+        ])
+        
+        return cmd
     else:
         print(f"Job {job_id}: Video is longer, mixing audio")
         
-        return [
-            'ffmpeg', '-y',
-            '-hwaccel', 'cuda',
-            '-i', video_path,
-            '-i', audio_path,
+        # Build base command with CUDA acceleration
+        cmd = build_base_command([video_path, audio_path], use_cuda=True)
+        
+        # Copy video stream, encode audio
+        cmd.extend([
             '-c:v', 'copy',
             '-c:a', 'aac',
             '-b:a', '128k',
@@ -153,4 +124,6 @@ def _build_merge_command(video_path, audio_path, output_path, video_duration,
             '-map', '[mixedaudio]',
             '-t', str(video_duration),
             output_path
-        ]
+        ])
+        
+        return cmd
