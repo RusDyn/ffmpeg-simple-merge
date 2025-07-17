@@ -80,7 +80,10 @@ def handler(event):
                 validated_inputs["image_url"],
                 validated_inputs["duration"],
                 validated_inputs["width"],
-                validated_inputs["height"]
+                validated_inputs["height"],
+                validated_inputs["zoom_factor"],
+                validated_inputs["pan_direction"],
+                validated_inputs["intensity"]
             )
             
             # Return base64 encoded result

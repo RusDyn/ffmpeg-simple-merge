@@ -3,7 +3,7 @@
 A high-performance, GPU-accelerated video processing service that runs on RunPod serverless infrastructure. This service provides two main functionalities:
 
 1. **Video + Audio Merging**: Combine video and audio files with automatic duration matching and independent volume control
-2. **Image to Parallax Video**: Convert static images into dynamic video content
+2. **Image to Parallax Video**: Convert static images into dynamic video content with pseudo-3D parallax effects
 
 ## 🚀 Features
 
@@ -13,6 +13,7 @@ A high-performance, GPU-accelerated video processing service that runs on RunPod
 - **Flexible audio mixing** with customizable volume levels (0-2x)
 - **Smart audio balancing** to prevent clipping when mixing tracks
 - **Flexible resolution support** (480x320 to 4096x4096)
+- **Parallax effects** with configurable pan directions, zoom, and intensity
 - **Base64 encoded output** for easy integration
 - **Optimized for speed** with ultrafast presets and efficient filtering
 - **Serverless scalability** with automatic scaling based on demand
@@ -242,7 +243,7 @@ curl -X POST https://api.runpod.ai/v2/{ENDPOINT_ID}/runsync \
 
 ### Image to Parallax Video
 
-Convert a static image into a video with specified duration and resolution:
+Convert a static image into a dynamic video with pseudo-3D parallax effects, configurable pan directions, zoom, and intensity:
 
 #### cURL Example
 
@@ -256,7 +257,10 @@ curl -X POST https://api.runpod.ai/v2/{ENDPOINT_ID}/runsync \
       "imageUrl": "https://example.com/image.jpg",
       "duration": 15,
       "width": 1920,
-      "height": 1080
+      "height": 1080,
+      "zoomFactor": 1.3,
+      "panDirection": "zoom_in",
+      "intensity": 0.7
     }
   }'
 ```
@@ -267,7 +271,9 @@ curl -X POST https://api.runpod.ai/v2/{ENDPOINT_ID}/runsync \
 import requests
 import base64
 
-def create_parallax_video(image_url, duration=10, width=1920, height=1080, endpoint_id, api_key):
+def create_parallax_video(image_url, duration=10, width=1920, height=1080, 
+                         zoom_factor=1.2, pan_direction='right', intensity=0.5, 
+                         endpoint_id, api_key):
     url = f"https://api.runpod.ai/v2/{endpoint_id}/runsync"
     headers = {
         "Authorization": f"Bearer {api_key}",
@@ -279,7 +285,10 @@ def create_parallax_video(image_url, duration=10, width=1920, height=1080, endpo
             "imageUrl": image_url,
             "duration": duration,
             "width": width,
-            "height": height
+            "height": height,
+            "zoomFactor": zoom_factor,
+            "panDirection": pan_direction,
+            "intensity": intensity
         }
     }
     
@@ -301,15 +310,57 @@ def create_parallax_video(image_url, duration=10, width=1920, height=1080, endpo
         print(f"Error: {result}")
         return None
 
-# Usage
+# Usage examples
 create_parallax_video(
     "https://example.com/landscape.jpg",
     duration=20,
     width=1920,
     height=1080,
+    zoom_factor=1.5,
+    pan_direction="zoom_in",
+    intensity=0.8,
     endpoint_id="your-endpoint-id",
     api_key="your-api-key"
 )
+```
+
+#### Parallax Effect Parameters
+
+The parallax action supports various parameters to create different pseudo-3D effects:
+
+- **zoomFactor**: Controls the zoom level (1.1-2.0, default: 1.2)
+  - Higher values create more pronounced zoom effects
+  - Used for zoom_in and zoom_out directions
+- **panDirection**: Direction of the parallax effect
+  - `'right'`: Pan from left to right (default)
+  - `'left'`: Pan from right to left
+  - `'up'`: Pan from bottom to top
+  - `'down'`: Pan from top to bottom
+  - `'zoom_in'`: Gradual zoom into the image
+  - `'zoom_out'`: Gradual zoom out from the image
+- **intensity**: Controls the strength of the parallax effect (0.1-1.0, default: 0.5)
+  - Lower values create subtle movement
+  - Higher values create more dramatic effects
+
+**Example combinations:**
+```json
+{
+  "panDirection": "right",
+  "intensity": 0.3,
+  "zoomFactor": 1.2
+}  // Subtle right pan
+
+{
+  "panDirection": "zoom_in", 
+  "intensity": 0.8,
+  "zoomFactor": 1.5
+}  // Dramatic zoom in effect
+
+{
+  "panDirection": "up",
+  "intensity": 0.6,
+  "zoomFactor": 1.3
+}  // Upward pan with medium intensity
 ```
 
 ### n8n Integration
@@ -408,7 +459,10 @@ For n8n workflow automation:
     "imageUrl": "string (required)",
     "duration": "number (default: 10, max: 60)",
     "width": "number (default: 1920, range: 480-4096)",
-    "height": "number (default: 1080, range: 320-4096)"
+    "height": "number (default: 1080, range: 320-4096)",
+    "zoomFactor": "number (default: 1.2, range: 1.1-2.0)",
+    "panDirection": "string (default: 'right', options: 'left', 'right', 'up', 'down', 'zoom_in', 'zoom_out')",
+    "intensity": "number (default: 0.5, range: 0.1-1.0)"
   }
 }
 ```
@@ -423,7 +477,10 @@ For n8n workflow automation:
     "size_bytes": 1234567,
     "action": "parallax",
     "duration": 10,
-    "resolution": "1920x1080"
+    "resolution": "1920x1080",
+    "zoom_factor": 1.2,
+    "pan_direction": "right",
+    "intensity": 0.5
   }
 }
 ```

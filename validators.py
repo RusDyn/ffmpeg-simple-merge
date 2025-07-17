@@ -47,6 +47,9 @@ class InputValidator:
         duration = input_data.get("duration", 10)
         width = input_data.get("width", 1920)
         height = input_data.get("height", 1080)
+        zoom_factor = input_data.get("zoomFactor", 1.2)
+        pan_direction = input_data.get("panDirection", "right")
+        intensity = input_data.get("intensity", 0.5)
         
         # Check required fields
         if not image_url:
@@ -75,9 +78,33 @@ class InputValidator:
         except (ValueError, TypeError):
             return False, "Invalid resolution format", None
         
+        # Validate zoom factor
+        try:
+            zoom_factor = float(zoom_factor)
+            if zoom_factor < 1.1 or zoom_factor > 2.0:
+                return False, "Zoom factor must be between 1.1 and 2.0", None
+        except (ValueError, TypeError):
+            return False, "Invalid zoom factor format", None
+        
+        # Validate pan direction
+        valid_directions = ['left', 'right', 'up', 'down', 'zoom_in', 'zoom_out']
+        if pan_direction not in valid_directions:
+            return False, f"Pan direction must be one of: {', '.join(valid_directions)}", None
+        
+        # Validate intensity
+        try:
+            intensity = float(intensity)
+            if intensity < 0.1 or intensity > 1.0:
+                return False, "Intensity must be between 0.1 and 1.0", None
+        except (ValueError, TypeError):
+            return False, "Invalid intensity format", None
+        
         return True, None, {
             "image_url": image_url,
             "duration": duration,
             "width": width,
-            "height": height
+            "height": height,
+            "zoom_factor": zoom_factor,
+            "pan_direction": pan_direction,
+            "intensity": intensity
         }
