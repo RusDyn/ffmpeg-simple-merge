@@ -1,8 +1,4 @@
 """RunPod serverless handler for video processing"""
-import sys
-import os
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
-
 import runpod
 import base64
 from merge import merge_video_audio

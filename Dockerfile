@@ -29,8 +29,8 @@ RUN ffmpeg -version
 COPY requirements.txt .
 RUN pip3 install --no-cache-dir -r requirements.txt
 
-# Copy the handler script
-COPY handler.py .
+# Copy all Python files
+COPY *.py .
 
 # Set the handler as the entrypoint
 CMD ["python", "handler.py"]
