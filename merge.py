@@ -83,11 +83,16 @@ def _build_merge_command(video_path, audio_path, output_path, video_duration,
         speed_factor = video_duration / audio_duration
         print(f"Job {job_id}: Audio is longer, slowing video by factor: {speed_factor}")
         
-        # Build base command with CUDA acceleration
-        cmd = build_base_command([video_path, audio_path], use_cuda=True)
+        # Build base command WITHOUT CUDA acceleration for filter compatibility
+        cmd = build_base_command([video_path, audio_path], use_cuda=False)
         
-        # Add NVENC video encoding params
-        cmd.extend(get_nvenc_params(preset='p1', cq=28))
+        # Use software encoding for compatibility with filters
+        cmd.extend([
+            '-c:v', 'libx264',
+            '-preset', 'ultrafast',
+            '-crf', '28',
+            '-pix_fmt', 'yuv420p'
+        ])
         
         # Add audio encoding and complex filter
         cmd.extend([
