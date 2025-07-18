@@ -83,12 +83,11 @@ def _build_merge_command(video_path, audio_path, output_path, video_duration,
         speed_factor = video_duration / audio_duration
         print(f"Job {job_id}: Audio is longer, slowing video by factor: {speed_factor}")
         
-        # Build base command with GPU decoding but NOT full CUDA pipeline
+        # Build base command without hardware acceleration for filter compatibility
         cmd = ['ffmpeg', '-y']
-        cmd.extend(['-hwaccel', 'cuda'])  # Use GPU for decoding only
         cmd.extend(['-i', video_path, '-i', audio_path])
         
-        # Use NVENC for encoding with format conversion
+        # Use NVENC for encoding after CPU-based filtering
         cmd.extend([
             '-c:v', 'h264_nvenc',
             '-preset', 'p1',  # Fastest preset for NVENC
