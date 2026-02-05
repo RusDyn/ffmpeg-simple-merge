@@ -3,6 +3,8 @@ import runpod
 import base64
 from merge import merge_video_audio
 from parallax import create_parallax_video
+from overlay import overlay_pip
+from concat import concat_videos
 from validators import InputValidator
 
 
@@ -100,9 +102,67 @@ def handler(event):
                 }
             }
             
+        elif action == "overlay_pip":
+            # Circular picture-in-picture overlay
+            is_valid, error_msg, validated_inputs = InputValidator.validate_overlay_pip_inputs(input_data)
+
+            if not is_valid:
+                return {"error": error_msg}
+
+            # Create overlay video
+            output_data = overlay_pip(
+                validated_inputs["background_url"],
+                validated_inputs["overlay_url"],
+                validated_inputs["position"],
+                validated_inputs["size"],
+                validated_inputs["margin"],
+                validated_inputs["border_width"],
+                validated_inputs["border_color"]
+            )
+
+            # Return base64 encoded result
+            output_b64 = base64.b64encode(output_data).decode('utf-8')
+
+            return {
+                "output": {
+                    "video_data": output_b64,
+                    "content_type": "video/mp4",
+                    "size_bytes": len(output_data),
+                    "action": "overlay_pip"
+                }
+            }
+
+        elif action == "concat":
+            # Video concatenation
+            is_valid, error_msg, validated_inputs = InputValidator.validate_concat_inputs(input_data)
+
+            if not is_valid:
+                return {"error": error_msg}
+
+            # Concatenate videos
+            output_data = concat_videos(
+                validated_inputs["segments"],
+                validated_inputs["width"],
+                validated_inputs["height"]
+            )
+
+            # Return base64 encoded result
+            output_b64 = base64.b64encode(output_data).decode('utf-8')
+
+            return {
+                "output": {
+                    "video_data": output_b64,
+                    "content_type": "video/mp4",
+                    "size_bytes": len(output_data),
+                    "action": "concat",
+                    "segment_count": len(validated_inputs["segments"]),
+                    "resolution": f"{validated_inputs['width']}x{validated_inputs['height']}"
+                }
+            }
+
         else:
             return {
-                "error": f"Unknown action: {action}. Supported actions: 'merge', 'parallax'"
+                "error": f"Unknown action: {action}. Supported actions: 'merge', 'parallax', 'overlay_pip', 'concat'"
             }
         
     except Exception as e:

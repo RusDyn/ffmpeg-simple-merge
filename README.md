@@ -1,9 +1,11 @@
 # FFmpeg Simple Merge - RunPod Serverless Video Processor
 
-A high-performance, GPU-accelerated video processing service that runs on RunPod serverless infrastructure. This service provides two main functionalities:
+A high-performance, GPU-accelerated video processing service that runs on RunPod serverless infrastructure. This service provides four main functionalities:
 
 1. **Video + Audio Merging**: Combine video and audio files with automatic duration matching and independent volume control
 2. **Image to Parallax Video**: Convert static images into dynamic video content with pseudo-3D parallax effects
+3. **Circular PiP Overlay**: Create picture-in-picture videos with circular avatar overlays on B-roll footage
+4. **Video Concatenation**: Concatenate multiple video segments with optional trimming and resolution normalization
 
 ## 🚀 Features
 
@@ -14,6 +16,8 @@ A high-performance, GPU-accelerated video processing service that runs on RunPod
 - **Smart audio balancing** to prevent clipping when mixing tracks
 - **Flexible resolution support** (480x320 to 4096x4096)
 - **Parallax effects** with configurable pan directions, zoom, and intensity
+- **Circular PiP overlays** with customizable position, size, and border styling
+- **Video concatenation** with per-segment trimming and resolution normalization
 - **Base64 encoded output** for easy integration
 - **Optimized for speed** with ultrafast presets and efficient filtering
 - **Serverless scalability** with automatic scaling based on demand
@@ -22,15 +26,18 @@ A high-performance, GPU-accelerated video processing service that runs on RunPod
 
 ```
 ffmpeg-simple-merge/
-├── handler.py          # Main serverless handler
-├── merge.py           # Video/audio merging logic
-├── parallax.py        # Image to video conversion
-├── validators.py      # Input validation
-├── utils.py           # Shared utilities
-├── requirements.txt   # Python dependencies
-├── Dockerfile         # Container configuration
-├── README.md          # This documentation
-└── CLAUDE.md          # Claude Code guidance
+├── handler.py          # Main serverless handler (routes all actions)
+├── merge.py            # Video/audio merging logic
+├── parallax.py         # Image to video conversion
+├── overlay.py          # Circular PiP overlay logic
+├── concat.py           # Video concatenation logic
+├── validators.py       # Input validation for all actions
+├── utils.py            # Shared utilities (download, duration, etc.)
+├── ffmpeg_utils.py     # FFmpeg command utilities
+├── requirements.txt    # Python dependencies
+├── Dockerfile          # Container configuration
+├── README.md           # This documentation
+└── CLAUDE.md           # Claude Code guidance
 ```
 
 ## 🛠️ Installation & Setup
@@ -351,7 +358,7 @@ The parallax action supports various parameters to create different pseudo-3D ef
 }  // Subtle right pan
 
 {
-  "panDirection": "zoom_in", 
+  "panDirection": "zoom_in",
   "intensity": 0.8,
   "zoomFactor": 1.5
 }  // Dramatic zoom in effect
@@ -362,6 +369,185 @@ The parallax action supports various parameters to create different pseudo-3D ef
   "zoomFactor": 1.3
 }  // Upward pan with medium intensity
 ```
+
+### Circular PiP Overlay
+
+Create picture-in-picture videos with a circular avatar overlay on B-roll footage. Perfect for talking-head videos with dynamic backgrounds:
+
+#### cURL Example
+
+```bash
+curl -X POST https://api.runpod.ai/v2/{ENDPOINT_ID}/runsync \
+  -H "Authorization: Bearer YOUR_RUNPOD_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "input": {
+      "action": "overlay_pip",
+      "backgroundUrl": "https://example.com/broll.mp4",
+      "overlayUrl": "https://example.com/avatar.mp4",
+      "position": "bottom_right",
+      "size": 200,
+      "margin": 20,
+      "borderWidth": 3,
+      "borderColor": "#ffffff"
+    }
+  }'
+```
+
+#### Python Example
+
+```python
+import requests
+import base64
+
+def create_pip_video(background_url, overlay_url, endpoint_id, api_key,
+                     position='bottom_right', size=200, margin=20,
+                     border_width=3, border_color='#ffffff'):
+    url = f"https://api.runpod.ai/v2/{endpoint_id}/runsync"
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json"
+    }
+    payload = {
+        "input": {
+            "action": "overlay_pip",
+            "backgroundUrl": background_url,
+            "overlayUrl": overlay_url,
+            "position": position,
+            "size": size,
+            "margin": margin,
+            "borderWidth": border_width,
+            "borderColor": border_color
+        }
+    }
+
+    response = requests.post(url, headers=headers, json=payload)
+    result = response.json()
+
+    if result.get("status") == "COMPLETED":
+        video_data = base64.b64decode(result["output"]["video_data"])
+        with open("pip_video.mp4", "wb") as f:
+            f.write(video_data)
+        print(f"PiP video saved! Size: {len(video_data)} bytes")
+        return video_data
+    else:
+        print(f"Error: {result}")
+        return None
+
+# Usage - Avatar in bottom-right corner
+create_pip_video(
+    "https://example.com/nature-broll.mp4",
+    "https://example.com/talking-avatar.mp4",
+    "your-endpoint-id",
+    "your-api-key",
+    position="bottom_right",
+    size=180,
+    border_width=3,
+    border_color="#ffffff"
+)
+```
+
+#### PiP Overlay Parameters
+
+- **position**: Corner placement of the circular overlay
+  - `'bottom_right'`: Bottom-right corner (default)
+  - `'bottom_left'`: Bottom-left corner
+  - `'top_right'`: Top-right corner
+  - `'top_left'`: Top-left corner
+- **size**: Diameter of the circular overlay in pixels (50-800, default: 200)
+- **margin**: Distance from edge in pixels (0-200, default: 20)
+- **borderWidth**: Width of the white border around circle (0-20, default: 3)
+- **borderColor**: Hex color of the border (default: #ffffff)
+
+**Use Cases:**
+- Talking-head videos with B-roll backgrounds
+- Tutorial videos with presenter in corner
+- News-style presentations
+- Gaming streams with facecam
+
+### Video Concatenation
+
+Concatenate multiple video segments into a single video with optional trimming and automatic resolution normalization:
+
+#### cURL Example
+
+```bash
+curl -X POST https://api.runpod.ai/v2/{ENDPOINT_ID}/runsync \
+  -H "Authorization: Bearer YOUR_RUNPOD_API_KEY" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "input": {
+      "action": "concat",
+      "segments": [
+        {"url": "https://example.com/intro.mp4", "trim_start": 0, "trim_end": 5},
+        {"url": "https://example.com/main.mp4", "trim_start": 2, "trim_end": 30},
+        {"url": "https://example.com/outro.mp4"}
+      ],
+      "width": 1920,
+      "height": 1080
+    }
+  }'
+```
+
+#### Python Example
+
+```python
+import requests
+import base64
+
+def concat_videos(segments, endpoint_id, api_key, width=1920, height=1080):
+    url = f"https://api.runpod.ai/v2/{endpoint_id}/runsync"
+    headers = {
+        "Authorization": f"Bearer {api_key}",
+        "Content-Type": "application/json"
+    }
+    payload = {
+        "input": {
+            "action": "concat",
+            "segments": segments,
+            "width": width,
+            "height": height
+        }
+    }
+
+    response = requests.post(url, headers=headers, json=payload)
+    result = response.json()
+
+    if result.get("status") == "COMPLETED":
+        video_data = base64.b64decode(result["output"]["video_data"])
+        with open("concatenated.mp4", "wb") as f:
+            f.write(video_data)
+        print(f"Concatenated video saved! Size: {len(video_data)} bytes")
+        return video_data
+    else:
+        print(f"Error: {result}")
+        return None
+
+# Usage - Combine intro, main content, and outro
+segments = [
+    {"url": "https://example.com/intro.mp4", "trim_start": 0, "trim_end": 5},
+    {"url": "https://example.com/talking-head.mp4", "trim_start": 10, "trim_end": 25},
+    {"url": "https://example.com/broll.mp4"},  # Full video, no trimming
+    {"url": "https://example.com/outro.mp4", "trim_start": 0, "trim_end": 3}
+]
+
+concat_videos(segments, "your-endpoint-id", "your-api-key")
+```
+
+#### Concatenation Parameters
+
+- **segments**: Array of segment objects (required, max 50 segments)
+  - `url`: URL of the video segment (required)
+  - `trim_start`: Start time in seconds (optional, default: 0)
+  - `trim_end`: End time in seconds (optional, uses full video if not specified)
+- **width**: Output video width (480-4096, default: 1920)
+- **height**: Output video height (320-4096, default: 1080)
+
+**Features:**
+- Automatic resolution normalization (all segments scaled/padded to target resolution)
+- Audio sample rate normalization (44100 Hz stereo)
+- Preserves aspect ratio with letterboxing/pillarboxing when needed
+- GPU-accelerated encoding
 
 ### n8n Integration
 
@@ -411,6 +597,40 @@ For n8n workflow automation:
       "duration": {{$json.duration}},
       "width": {{$json.width}},
       "height": {{$json.height}}
+    }
+  }
+  ```
+
+**For Overlay PiP:**
+- **Method**: POST
+- **URL**: `https://api.runpod.ai/v2/{{$json.endpointId}}/runsync`
+- **Body**:
+  ```json
+  {
+    "input": {
+      "action": "overlay_pip",
+      "backgroundUrl": "{{$json.backgroundUrl}}",
+      "overlayUrl": "{{$json.overlayUrl}}",
+      "position": "bottom_right",
+      "size": 180,
+      "margin": 20,
+      "borderWidth": 3,
+      "borderColor": "#ffffff"
+    }
+  }
+  ```
+
+**For Video Concatenation:**
+- **Method**: POST
+- **URL**: `https://api.runpod.ai/v2/{{$json.endpointId}}/runsync`
+- **Body**:
+  ```json
+  {
+    "input": {
+      "action": "concat",
+      "segments": {{JSON.stringify($json.segments)}},
+      "width": 1920,
+      "height": 1080
     }
   }
   ```
@@ -481,6 +701,76 @@ For n8n workflow automation:
     "zoom_factor": 1.2,
     "pan_direction": "right",
     "intensity": 0.5
+  }
+}
+```
+
+### Overlay PiP Action
+
+**Endpoint**: `POST /v2/{endpoint_id}/runsync`
+
+**Request Body**:
+```json
+{
+  "input": {
+    "action": "overlay_pip",
+    "backgroundUrl": "string (required) - B-roll or background video URL",
+    "overlayUrl": "string (required) - Avatar or overlay video URL",
+    "position": "string (default: 'bottom_right', options: 'bottom_right', 'bottom_left', 'top_right', 'top_left')",
+    "size": "number (default: 200, range: 50-800) - Circle diameter in pixels",
+    "margin": "number (default: 20, range: 0-200) - Distance from edge in pixels",
+    "borderWidth": "number (default: 3, range: 0-20) - Border thickness in pixels",
+    "borderColor": "string (default: '#ffffff') - Hex color for border"
+  }
+}
+```
+
+**Response**:
+```json
+{
+  "status": "COMPLETED",
+  "output": {
+    "video_data": "base64_encoded_video_data",
+    "content_type": "video/mp4",
+    "size_bytes": 1234567,
+    "action": "overlay_pip"
+  }
+}
+```
+
+### Concat Action
+
+**Endpoint**: `POST /v2/{endpoint_id}/runsync`
+
+**Request Body**:
+```json
+{
+  "input": {
+    "action": "concat",
+    "segments": [
+      {
+        "url": "string (required) - Video segment URL",
+        "trim_start": "number (default: 0) - Start time in seconds",
+        "trim_end": "number (optional) - End time in seconds"
+      }
+    ],
+    "width": "number (default: 1920, range: 480-4096)",
+    "height": "number (default: 1080, range: 320-4096)"
+  }
+}
+```
+
+**Response**:
+```json
+{
+  "status": "COMPLETED",
+  "output": {
+    "video_data": "base64_encoded_video_data",
+    "content_type": "video/mp4",
+    "size_bytes": 1234567,
+    "action": "concat",
+    "segment_count": 3,
+    "resolution": "1920x1080"
   }
 }
 ```
@@ -563,6 +853,8 @@ The service includes several performance optimizations:
 |-----------|----------------|---------------|-------|
 | Video Merge (10s) | 5-15 seconds | $0.02-0.05 | Depends on duration mismatch |
 | Parallax Video (10s) | 8-20 seconds | $0.03-0.08 | Depends on image size |
+| Overlay PiP (10s) | 10-25 seconds | $0.04-0.10 | Complex filter chain |
+| Concat (5 segments) | 20-60 seconds | $0.08-0.20 | Depends on segment count/length |
 | Cold Start | 10-30 seconds | Included | First request after idle |
 
 ## 🐛 Troubleshooting
